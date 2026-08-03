@@ -659,6 +659,52 @@ def test_unjoined_ecce_returns_zero_when_no_baseline_rows():
     np.testing.assert_allclose(result, 0.0)
 
 
+@pytest.mark.parametrize("use_weights", [False, True])
+def test_unjoined_ecce_sigma_matches_joined_ecce_sigma(use_weights, rng):
+    n = 200
+    predicted_scores = rng.random_sample(n)
+    labels = (rng.random_sample(n) < predicted_scores).astype(int)
+    sample_weight = rng.random_sample(n) + 0.1 if use_weights else None
+
+    joined = metrics.ecce_sigma(labels, predicted_scores, sample_weight)
+
+    unjoined_scores, unjoined_labels = utils.make_unjoined(predicted_scores, labels)
+    if use_weights:
+        positive_indices = np.where(labels == 1)[0]
+        unjoined_weight = np.concatenate(
+            [sample_weight, sample_weight[positive_indices]]
+        )
+    else:
+        unjoined_weight = None
+    unjoined = metrics.unjoined_ecce_sigma(
+        unjoined_labels, unjoined_scores, unjoined_weight
+    )
+
+    np.testing.assert_allclose(unjoined, joined)
+
+
+def test_unjoined_ecce_sigma_returns_inf_for_zero_variance():
+    # Constant prediction 0 with conversions present: sigma is 0 but ecce != 0.
+    labels = np.array([0, 0, 1, 1])
+    predicted_scores = np.array([0.0, 0.0, 0.0, 0.0])
+    assert metrics.unjoined_ecce_sigma(labels, predicted_scores) == np.inf
+
+
+def test_unjoined_ecce_sigma_does_not_modify_inputs():
+    labels = np.array([0, 1, 0])
+    predicted_scores = np.array([0.2, 0.8, 0.8])
+    sample_weight = np.array([3.0, 2.0, 2.0])
+    labels_copy = labels.copy()
+    predicted_scores_copy = predicted_scores.copy()
+    sample_weight_copy = sample_weight.copy()
+
+    metrics.unjoined_ecce_sigma(labels, predicted_scores, sample_weight)
+
+    np.testing.assert_array_equal(labels, labels_copy)
+    np.testing.assert_array_equal(predicted_scores, predicted_scores_copy)
+    np.testing.assert_array_equal(sample_weight, sample_weight_copy)
+
+
 @pytest.mark.parametrize(
     "labels, predicted_scores, sample_weight, num_bins, expected",
     [

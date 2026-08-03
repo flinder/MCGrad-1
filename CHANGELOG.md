@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `unjoined_ecce_sigma`: the standard-deviation-normalized `unjoined_ecce` (companion to `ecce_sigma` for unjoined data). The null standard deviation is estimated over the baseline (`label == 0`) rows; on the joined equivalent of the same data it returns exactly the same value as `ecce_sigma`.
 - `unjoined_ecce`: computes the Estimated Cumulative Calibration Error (ECCE / Kuiper calibration statistic) on data in "unjoined" format, where the per-instance baseline and positive events are logged as separate rows (as produced by `make_unjoined`) rather than joined per instance. Returns exactly the same value as `ecce` on the joined equivalent of the same data.
 
 ## [0.1.5] - 2026-06-03

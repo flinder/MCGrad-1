@@ -1248,6 +1248,45 @@ def unjoined_ecce(
     return np.ptp(cumulative_differences)
 
 
+def unjoined_ecce_sigma(
+    labels: npt.NDArray,
+    predicted_scores: npt.NDArray,
+    sample_weight: npt.NDArray | None = None,
+) -> float:
+    """
+    Calculate the unjoined ECCE normalized by its null standard deviation.
+
+    Companion to :func:`unjoined_ecce`, analogous to :func:`ecce_sigma` for joined
+    data. The standard deviation under the null of perfect calibration is
+    estimated over the baseline (``label == 0``) rows, i.e. the per-instance rows
+    that carry the predictions, using the same Bernoulli form as
+    :func:`ecce_sigma`. On the joined equivalent of the same data (as produced by
+    :func:`make_unjoined`) this returns exactly the same value as
+    :func:`ecce_sigma`.
+
+    :param labels: Array of row tags: ``1`` for positive-event rows, ``0`` for
+        baseline rows.
+    :param predicted_scores: Array of predicted probabilities.
+    :param sample_weight: Optional array of sample weights (defaults to 1 per
+        row).
+    :return: The standard-deviation-normalized unjoined ECCE value.
+    """
+    labels = np.asarray(labels)
+    predicted_scores = np.asarray(predicted_scores)
+    if sample_weight is not None:
+        sample_weight = np.asarray(sample_weight)
+
+    ecce_value = unjoined_ecce(labels, predicted_scores, sample_weight)
+
+    base = labels == 0
+    base_weight = sample_weight[base] if sample_weight is not None else None
+    sigma = _ecce_standard_deviation(predicted_scores[base], sample_weight=base_weight)
+
+    if sigma == 0:
+        return np.inf if ecce_value != 0 else 0.0
+    return ecce_value / sigma
+
+
 def _rank_calibration_error(
     labels: npt.NDArray,
     predicted_labels: npt.NDArray,
