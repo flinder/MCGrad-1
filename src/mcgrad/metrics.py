@@ -1182,6 +1182,72 @@ def ecce_pvalue(
     return ecce_pvalue_from_sigma(sigma)
 
 
+def unjoined_ecce(
+    labels: npt.NDArray,
+    predicted_scores: npt.NDArray,
+    sample_weight: npt.NDArray | None = None,
+) -> float:
+    """
+    Calculate the Estimated Cumulative Calibration Error (ECCE) on data in
+    "unjoined" format.
+
+    In the unjoined format (see :func:`make_unjoined`) every instance contributes
+    a row with ``label == 0``, and each positive instance contributes an
+    additional row with ``label == 1``. This representation arises when positive
+    events and the per-instance baseline are logged as separate streams and are
+    never joined at the row level, so the number of positives cannot be read off
+    a single row.
+
+    The statistic is identical to the joined :func:`ecce`. Grouping by
+    prediction, the per-group residual is ``positives - p * base`` where
+    ``positives`` is the summed weight of ``label == 1`` rows, ``base`` is the
+    summed weight of ``label == 0`` rows, and ``p`` is the prediction. The
+    cumulative sum, taken in ascending order of prediction, is normalized by the
+    total ``label == 0`` weight. On the joined equivalent of the same data (as
+    produced by :func:`make_unjoined`) this returns exactly the same value as
+    :func:`ecce`.
+
+    :param labels: Array of row tags: ``1`` for positive-event rows, ``0`` for
+        baseline rows.
+    :param predicted_scores: Array of predicted probabilities.
+    :param sample_weight: Optional array of sample weights (defaults to 1 per
+        row).
+    :return: The ECCE value.
+    """
+    labels = np.asarray(labels)
+    predicted_scores = np.asarray(predicted_scores)
+    if labels.shape[0] != predicted_scores.shape[0]:
+        raise ValueError("labels and predicted_scores must have the same length.")
+    if sample_weight is None:
+        sample_weight = np.ones_like(predicted_scores, dtype=np.float64)
+    else:
+        sample_weight = np.asarray(sample_weight)
+        if sample_weight.shape[0] != predicted_scores.shape[0]:
+            raise ValueError(
+                "sample_weight must be the same length as predicted_scores."
+            )
+
+    positive_weight = sample_weight * (labels == 1)
+    base_weight = sample_weight * (labels == 0)
+
+    # np.unique sorts ascending -> gives the score ordering the cumsum relies on
+    unique_scores, inverse = np.unique(predicted_scores, return_inverse=True)
+    inverse = np.ravel(inverse)
+    n_groups = unique_scores.shape[0]
+    positives = np.bincount(inverse, weights=positive_weight, minlength=n_groups)
+    base = np.bincount(inverse, weights=base_weight, minlength=n_groups)
+
+    total_base_weight = base.sum()
+    if total_base_weight == 0:
+        return 0.0
+
+    residuals = positives - unique_scores * base
+    cumulative_differences = np.concatenate(
+        ([0.0], np.cumsum(residuals) / total_base_weight)
+    )
+    return np.ptp(cumulative_differences)
+
+
 def _rank_calibration_error(
     labels: npt.NDArray,
     predicted_labels: npt.NDArray,

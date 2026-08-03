@@ -580,6 +580,86 @@ def test_ecce_sigma_gives_expected_result_for_scores_resulting_in_zero_variance(
 
 
 @pytest.mark.parametrize(
+    "labels, predicted_scores, sample_weight, expected_result",
+    [
+        ([0, 1, 0], [0.2, 0.8, 0.8], None, 0.1),
+        ([0, 1, 0], [0.2, 0.8, 0.8], [3, 2, 2], 0.12),
+        ([0, 0], [0.2, 0.8], None, 0.5),
+    ],
+)
+def test_unjoined_ecce_gives_expected_result(
+    labels, predicted_scores, sample_weight, expected_result
+):
+    labels = np.array(labels)
+    predicted_scores = np.array(predicted_scores)
+    if sample_weight is not None:
+        sample_weight = np.array(sample_weight)
+    result = metrics.unjoined_ecce(labels, predicted_scores, sample_weight)
+    np.testing.assert_allclose(result, expected_result)
+
+
+@pytest.mark.parametrize("use_weights", [False, True])
+def test_unjoined_ecce_matches_joined_ecce(use_weights, rng):
+    n = 200
+    # Distinct scores avoid ambiguity from tied predictions in the joined ecce.
+    predicted_scores = rng.random_sample(n)
+    labels = (rng.random_sample(n) < predicted_scores).astype(int)
+    sample_weight = rng.random_sample(n) + 0.1 if use_weights else None
+
+    joined = metrics.ecce(labels, predicted_scores, sample_weight)
+
+    unjoined_scores, unjoined_labels = utils.make_unjoined(predicted_scores, labels)
+    if use_weights:
+        positive_indices = np.where(labels == 1)[0]
+        unjoined_weight = np.concatenate(
+            [sample_weight, sample_weight[positive_indices]]
+        )
+    else:
+        unjoined_weight = None
+    unjoined = metrics.unjoined_ecce(unjoined_labels, unjoined_scores, unjoined_weight)
+
+    np.testing.assert_allclose(unjoined, joined)
+
+
+def test_unjoined_ecce_does_not_modify_inputs():
+    labels = np.array([0, 1, 0])
+    predicted_scores = np.array([0.2, 0.8, 0.8])
+    sample_weight = np.array([3.0, 2.0, 2.0])
+    labels_copy = labels.copy()
+    predicted_scores_copy = predicted_scores.copy()
+    sample_weight_copy = sample_weight.copy()
+
+    metrics.unjoined_ecce(labels, predicted_scores, sample_weight)
+
+    np.testing.assert_array_equal(labels, labels_copy)
+    np.testing.assert_array_equal(predicted_scores, predicted_scores_copy)
+    np.testing.assert_array_equal(sample_weight, sample_weight_copy)
+
+
+def test_unjoined_ecce_raises_on_mismatched_lengths():
+    with pytest.raises(
+        ValueError, match="labels and predicted_scores must have the same length"
+    ):
+        metrics.unjoined_ecce(np.array([0, 1]), np.array([0.2, 0.8, 0.5]))
+
+
+def test_unjoined_ecce_raises_on_mismatched_sample_weight():
+    with pytest.raises(
+        ValueError, match="sample_weight must be the same length as predicted_scores"
+    ):
+        metrics.unjoined_ecce(
+            np.array([0, 1, 0]),
+            np.array([0.2, 0.8, 0.5]),
+            np.array([1.0, 1.0]),
+        )
+
+
+def test_unjoined_ecce_returns_zero_when_no_baseline_rows():
+    result = metrics.unjoined_ecce(np.array([1, 1]), np.array([0.2, 0.8]))
+    np.testing.assert_allclose(result, 0.0)
+
+
+@pytest.mark.parametrize(
     "labels, predicted_scores, sample_weight, num_bins, expected",
     [
         (

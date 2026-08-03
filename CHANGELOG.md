@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `unjoined_ecce`: computes the Estimated Cumulative Calibration Error (ECCE / Kuiper calibration statistic) on data in "unjoined" format, where the per-instance baseline and positive events are logged as separate rows (as produced by `make_unjoined`) rather than joined per instance. Returns exactly the same value as `ecce` on the joined equivalent of the same data.
+
 ## [0.1.5] - 2026-06-03
 
 ### Added
